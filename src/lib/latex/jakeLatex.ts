@@ -76,24 +76,6 @@ function jakeLatexPreamble(docClassPt: number) {
     \\end{tabular*}\\vspace{-7pt}
 }
 
-% Education: school | dates on row 1; degree full width on row 2; optional details wrap on row 3 (not beside dates).
-\\newcommand{\\resumeEducationEntryTwo}[3]{
-  \\vspace{-2pt}\\item
-    \\begin{tabular*}{0.97\\textwidth}[t]{@{}p{0.62\\textwidth}@{\\extracolsep{\\fill}}r@{}}
-      \\textbf{#1} & \\textit{\\small #3} \\\\
-      \\multicolumn{2}{@{}p{0.94\\textwidth}}{\\textit{\\small #2}} \\\\
-    \\end{tabular*}\\vspace{-7pt}
-}
-
-\\newcommand{\\resumeEducationEntry}[4]{
-  \\vspace{-2pt}\\item
-    \\begin{tabular*}{0.97\\textwidth}[t]{@{}p{0.62\\textwidth}@{\\extracolsep{\\fill}}r@{}}
-      \\textbf{#1} & \\textit{\\small #4} \\\\
-      \\multicolumn{2}{@{}p{0.94\\textwidth}}{\\textit{\\small #2}} \\\\
-      \\multicolumn{2}{@{}p{0.94\\textwidth}}{\\raggedright\\small #3} \\\\
-    \\end{tabular*}\\vspace{-7pt}
-}
-
 \\newcommand{\\resumeProjectHeading}[2]{
     \\item
     \\begin{tabular*}{0.97\\textwidth}{l@{\\extracolsep{\\fill}}r}
@@ -122,16 +104,11 @@ function latexDocClassPt(scale: ResumeContent["resumeTextScale"] | undefined): n
 
 function buildEducationLatex(content: ResumeContent): string {
   const education = content.education
-    .map((e) => {
-      const dates = escapeLatex(`${e.start} -- ${e.end}`);
-      const details = (e.details ?? "").trim();
-      if (details) {
-        return `    \\resumeEducationEntry
-      {${escapeLatex(e.school)}}{${escapeLatex(e.degree)}}{${escapeLatex(details)}}{${dates}}`;
-      }
-      return `    \\resumeEducationEntryTwo
-      {${escapeLatex(e.school)}}{${escapeLatex(e.degree)}}{${dates}}`;
-    })
+    .map(
+      (e) => `    \\resumeSubheading
+      {${escapeLatex(e.school)}}{${escapeLatex(e.details || "")}}
+      {${escapeLatex(e.degree)}}{${escapeLatex(`${e.start} -- ${e.end}`)}}`
+    )
     .join("\n");
   return `\\section{Education}
   \\resumeSubHeadingListStart

@@ -1,26 +1,4 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ["pdfjs-dist", "canvas"],
-  },
-  webpack: (config, { isServer }) => {
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      canvas: false,
-      encoding: false,
-    };
-
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        canvas: false,
-        fs: false,
-        encoding: false,
-      };
-    }
-
-    return config;
-  },
-};
+const nextConfig = {};
 
 export default nextConfig;

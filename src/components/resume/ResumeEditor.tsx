@@ -420,9 +420,9 @@ export function ResumeEditor(props: {
 
   return (
     <div className="h-[calc(100vh-76px)] w-full overflow-hidden rounded-none border border-white/10 bg-white/5 p-2 md:p-3">
-      <div className="grid h-full min-h-0 min-w-0 gap-3 lg:grid-cols-[2fr_3fr]">
+      <div className="grid h-full min-w-0 gap-3 lg:grid-cols-[2fr_3fr]">
         {/* Left panel: independent scroll */}
-        <div className="h-full min-h-0 min-w-0 overflow-y-auto pr-1">
+        <div className="h-full min-w-0 overflow-y-auto pr-1">
           <div className="flex flex-col gap-4 pb-4">
             <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -1160,11 +1160,11 @@ export function ResumeEditor(props: {
           </div>
         </div>
 
-        {/* Right panel: scrollable so preview + export are never clipped */}
-        <div className="h-full min-h-0 min-w-0 overflow-y-auto overflow-x-hidden pr-1">
-          <div className="flex min-h-0 flex-col gap-4 pb-4">
-            <div className="flex min-h-0 flex-col rounded-3xl border border-white/10 bg-black/20 p-4">
-              <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
+        {/* Right panel: fixed preview */}
+        <div className="h-full min-w-0">
+          <div className="sticky top-0 flex h-full flex-col gap-4">
+            <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
                 <div className="text-sm font-semibold text-white">Live preview</div>
                 <div className="text-right text-xs text-zinc-400">
                   {isJakeTemplate
@@ -1172,14 +1172,12 @@ export function ResumeEditor(props: {
                     : "Updates as you edit"}
                 </div>
               </div>
-              <div className="flex min-h-[min(85vh,calc(100vh-10rem))] flex-1 flex-col">
-                <ResumePreview
-                  resume={previewResume}
-                  template={template}
-                  compiledPdfUrl={isJakeTemplate ? compiledJakePdfUrl : undefined}
-                  compiling={isJakeTemplate && isConvertingLatex}
-                />
-              </div>
+              <ResumePreview
+                resume={previewResume}
+                template={template}
+                compiledPdfUrl={isJakeTemplate ? compiledJakePdfUrl : null}
+                compiling={isJakeTemplate && isConvertingLatex}
+              />
               {isJakeTemplate ? (
                 <div className="mt-2 inline-flex items-center gap-2 text-xs text-zinc-500">
                   <Code2 size={12} />
