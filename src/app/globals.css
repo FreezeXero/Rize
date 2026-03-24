@@ -3,25 +3,105 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #070e1c;
+  --foreground: #e4e4e7;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #070e1c;
+    --foreground: #e4e4e7;
   }
 }
 
 body {
   color: var(--foreground);
-  background: var(--background);
+  background: radial-gradient(
+      ellipse 60% 50% at 50% -10%,
+      rgba(59, 130, 246, 0.18),
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse 60% 50% at 20% 90%,
+      rgba(34, 211, 238, 0.1),
+      transparent 58%
+    ),
+    linear-gradient(to bottom, #08112a 0%, #070e1c 55%, #060a17 100%);
   font-family: Arial, Helvetica, sans-serif;
+  background-size: 120% 120%, 120% 120%, 100% 100%;
+  animation: rize-bg-shift 18s ease-in-out infinite alternate;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+}
+
+@keyframes rize-marquee {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.rize-marquee-track {
+  animation: rize-marquee 44s linear infinite;
+}
+
+@keyframes rize-holo-sweep {
+  0% {
+    transform: translateX(-10%) skewX(-12deg);
+    filter: blur(0px);
+  }
+  100% {
+    transform: translateX(10%) skewX(-12deg);
+    filter: blur(0.2px);
+  }
+}
+
+.rize-holo-sweep {
+  animation: rize-holo-sweep 6s ease-in-out infinite alternate;
+  filter: saturate(1.15) contrast(1.05);
+}
+
+@keyframes rize-bg-shift {
+  0% {
+    background-position: 46% 0%, 18% 92%, 0% 0%;
+  }
+  100% {
+    background-position: 54% -4%, 24% 98%, 0% 0%;
+  }
+}
+
+@keyframes rize-iridescent-flow {
+  0% {
+    transform: translateX(-2%) translateY(0);
+    filter: saturate(1.1);
+  }
+  100% {
+    transform: translateX(2%) translateY(0.5%);
+    filter: saturate(1.25);
+  }
+}
+
+.rize-iridescent-flow {
+  animation: rize-iridescent-flow 8s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rize-marquee-track {
+    animation: none;
+  }
+  .rize-holo-sweep {
+    animation: none;
+  }
+  .rize-iridescent-flow {
+    animation: none;
+  }
+  body {
+    animation: none;
   }
 }

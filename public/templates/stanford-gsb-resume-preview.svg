@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="595" height="842" viewBox="0 0 595 842">
+  <rect width="595" height="842" fill="#ffffff"/>
+  <text x="297" y="56" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="22" fill="#111827">JANE M. DOE</text>
+  <text x="297" y="82" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="9.5" fill="#374151">(650) 555-0198 | jmdoe@stanford.edu | linkedin.com/in/jmdoe</text>
+  <line x1="72" y1="96" x2="523" y2="96" stroke="#111827" stroke-width="1.2"/>
+  <text x="72" y="118" font-family="Georgia, serif" font-size="11" font-weight="700" fill="#111827" letter-spacing="0.08em">EDUCATION</text>
+  <text x="72" y="138" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#111827">Stanford University, Stanford, CA</text>
+  <text x="420" y="138" text-anchor="end" font-family="Arial, sans-serif" font-size="9.5" fill="#4b5563">Sept 2022 ñ June 2026</text>
+  <text x="72" y="154" font-family="Arial, sans-serif" font-size="9.5" fill="#374151">Master of Business Administration, GPA 3.8</text>
+  <text x="72" y="178" font-family="Georgia, serif" font-size="11" font-weight="700" fill="#111827" letter-spacing="0.08em">PROFESSIONAL EXPERIENCE</text>
+  <text x="72" y="200" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#111827">Acme Capital ù Summer Associate</text>
+  <text x="420" y="200" text-anchor="end" font-family="Arial, sans-serif" font-size="9.5" fill="#4b5563">June  Aug 2025</text>
+  <text x="88" y="218" font-family="Arial, sans-serif" font-size="9" fill="#1f2937">" Built financial models for $120M growth-stage investment; presented findings to IC.</text>
+  <text x="88" y="234" font-family="Arial, sans-serif" font-size="9" fill="#1f2937">" Conducted market sizing and competitive landscape analysis for enterprise SaaS vertical.</text>
+  <text x="72" y="258" font-family="Arial, sans-serif" font-size="10" font-weight="700" fill="#111827">Stanford GSB ù Teaching Assistant</text>
+  <text x="420" y="258" text-anchor="end" font-family="Arial, sans-serif" font-size="9.5" fill="#4b5563">Sept 2024  June 2025</text>
+  <text x="88" y="276" font-family="Arial, sans-serif" font-size="9" fill="#1f2937">" Supported 45 students in core finance course; held weekly office hours and graded cases.</text>
+  <text x="72" y="300" font-family="Georgia, serif" font-size="11" font-weight="700" fill="#111827" letter-spacing="0.08em">LEADERSHIP &amp; ACTIVITIES</text>
+  <text x="88" y="322" font-family="Arial, sans-serif" font-size="9" fill="#1f2937">" VP, Finance Club  led speaker series with 12 industry guests; 200+ attendees.</text>
+  <text x="72" y="346" font-family="Georgia, serif" font-size="11" font-weight="700" fill="#111827" letter-spacing="0.08em">SKILLS &amp; INTERESTS</text>
+  <text x="72" y="366" font-family="Arial, sans-serif" font-size="9.5" fill="#374151">Financial modeling (DCF, LBO) ù Excel / PowerPoint ù SQL ù Python ù Fluent Spanish</text>
+</svg>

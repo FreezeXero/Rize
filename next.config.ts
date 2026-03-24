@@ -1,5 +1,10 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+import type { NextConfig } from "next";
+
+/**
+ * Mirror of `next.config.mjs` for TypeScript / editor tooling.
+ * Next.js 14.x only auto-loads `next.config.{js,mjs,cjs}` — the active file is `next.config.mjs`.
+ */
+const nextConfig: NextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["pdfjs-dist", "canvas"],
   },
