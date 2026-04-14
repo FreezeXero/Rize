@@ -9,8 +9,12 @@ create table if not exists public.users (
   billing_cycle text not null default 'monthly' check (billing_cycle in ('monthly', 'annual')),
   exports_this_month integer not null default 0,
   ai_uses_this_month integer not null default 0,
+  ai_latex_uses integer not null default 0,
   created_at timestamptz not null default now()
 );
+
+alter table public.users
+  add column if not exists ai_latex_uses integer not null default 0;
 
 -- Keep email up to date on signup (optional).
 create or replace function public.handle_new_user()

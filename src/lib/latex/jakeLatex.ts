@@ -36,6 +36,7 @@ function jakeLatexPreamble(docClassPt: number) {
 \\usepackage{fancyhdr}
 \\usepackage[english]{babel}
 \\usepackage{tabularx}
+\\usepackage{ragged2e}
 \\input{glyphtounicode}
 
 \\pagestyle{fancy}
@@ -102,17 +103,40 @@ function latexDocClassPt(scale: ResumeContent["resumeTextScale"] | undefined): n
   }
 }
 
+function resolveSectionTitle(content: ResumeContent, id: string, fallback: string): string {
+  const raw = content.sectionTitles?.[id];
+  return raw?.trim() ? raw.trim() : fallback;
+}
+
+/** Section heading + justified paragraph; omitted when empty. */
+function buildSummaryLatex(content: ResumeContent): string {
+  const text = (content.summary ?? "").trim();
+  if (!text) return "";
+  const para = escapeLatex(text).replace(/\n/g, " ");
+  return `\\section{${escapeLatex(resolveSectionTitle(content, "summary", "Summary"))}}
+\\begin{justify}
+{\\small ${para}}
+\\end{justify}`;
+}
+
 function buildEducationLatex(content: ResumeContent): string {
   const education = content.education
-    .map(
-      (e) => `    \\resumeSubheading
-      {${escapeLatex(e.school)}}{${escapeLatex(e.details || "")}}
-      {${escapeLatex(e.degree)}}{${escapeLatex(`${e.start} -- ${e.end}`)}}`
-    )
+    .map((e) => {
+      const location = ((e as { location?: string }).location ?? "").trim();
+      const details = (e.details || "").trim();
+      const heading = `  \\resumeSubheading
+      {${escapeLatex(e.school)}}{${escapeLatex(location)}}
+      {${escapeLatex(e.degree)}}{${escapeLatex(`${e.start} -- ${e.end}`)}}`;
+      if (!details) return heading;
+      return `${heading}
+  \\resumeItemListStart
+    \\resumeItem{${escapeLatex(details)}}
+  \\resumeItemListEnd`;
+    })
     .join("\n");
-  return `\\section{Education}
+  return `\\section{${escapeLatex(resolveSectionTitle(content, "education", "Education"))}}
   \\resumeSubHeadingListStart
-${education || "    \\item \\textit{Add your education.}"}
+${education || "  \\item \\textit{Add your education.}"}
   \\resumeSubHeadingListEnd`;
 }
 
@@ -120,14 +144,14 @@ function buildExperienceLatex(content: ResumeContent): string {
   const experience = content.experience
     .map(
       (e) => `    \\resumeSubheading
-      {${escapeLatex(e.role)}}{${escapeLatex(`${e.start} -- ${e.end}`)}}
-      {${escapeLatex(e.company)}}{}
+      {${escapeLatex(e.role)}}{${escapeLatex(e.location ?? "")}}
+      {${escapeLatex(e.company)}}{${escapeLatex(`${e.start} -- ${e.end}`)}}
       \\resumeItemListStart
 ${e.bullets.map((b) => `        \\resumeItem{${escapeLatex(b)}}`).join("\n")}
       \\resumeItemListEnd`
     )
     .join("\n\n");
-  return `\\section{Experience}
+  return `\\section{${escapeLatex(resolveSectionTitle(content, "experience", "Experience"))}}
   \\resumeSubHeadingListStart
 ${experience || "    \\item \\textit{Add your experience.}"}
   \\resumeSubHeadingListEnd`;
@@ -143,7 +167,7 @@ ${p.bullets.map((b) => `            \\resumeItem{${escapeLatex(b)}}`).join("\n")
           \\resumeItemListEnd`
     )
     .join("\n");
-  return `\\section{Projects}
+  return `\\section{${escapeLatex(resolveSectionTitle(content, "projects", "Projects"))}}
     \\resumeSubHeadingListStart
 ${projects || "      \\item \\textit{Add your projects.}"}
     \\resumeSubHeadingListEnd`;
@@ -160,7 +184,7 @@ ${p.bullets.map((b) => `            \\resumeItem{${escapeLatex(b)}}`).join("\n")
           \\resumeItemListEnd`
     )
     .join("\n");
-  return `\\section{Leadership and Activities}
+  return `\\section{${escapeLatex(resolveSectionTitle(content, "leadership", "Leadership and Activities"))}}
     \\resumeSubHeadingListStart
 ${blocks || "      \\item \\textit{Add leadership or activities.}"}
     \\resumeSubHeadingListEnd`;
@@ -168,21 +192,12 @@ ${blocks || "      \\item \\textit{Add leadership or activities.}"}
 
 function buildSkillsLatex(content: ResumeContent): string {
   const lines = (content.skills || []).map((s) => `     ${escapeLatex(s)} \\\\`).join("\n");
-  return `\\section{Technical Skills}
+  return `\\section{${escapeLatex(resolveSectionTitle(content, "skills", "Technical Skills"))}}
  \\begin{itemize}[leftmargin=0.15in, label={}]
     \\small{\\item{
 ${lines || "     \\textit{Add skills.} \\\\"}
     }}
  \\end{itemize}`;
-}
-
-function buildSummaryLatex(content: ResumeContent): string {
-  const t = (content.summary || "").trim();
-  const body = t ? escapeLatex(t).replace(/\n/g, "\\\\\n") : "\\textit{Add a concise professional summary.}";
-  return `\\section{Summary}
-\\begin{flushleft}
-{\\small ${body}}
-\\end{flushleft}`;
 }
 
 function buildCustomSectionLatex(cs: NonNullable<ResumeContent["customSections"]>[0]): string {
@@ -228,7 +243,8 @@ export function buildOfficialJakeLatex(content: ResumeContent): string {
 
   for (const id of order) {
     if (id === "summary") {
-      bodyChunks.push(buildSummaryLatex(content));
+      const latex = buildSummaryLatex(content);
+      if (latex) bodyChunks.push(latex);
     } else if (id === "education") {
       bodyChunks.push(buildEducationLatex(content));
     } else if (id === "experience") {
@@ -253,7 +269,7 @@ export function buildOfficialJakeLatex(content: ResumeContent): string {
     \\small ${contactLatex}
 \\end{center}
 
-${bodyChunks.join("\n\n")}
+${bodyChunks.join("\n")}
 
 \\end{document}`;
 }

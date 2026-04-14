@@ -29,6 +29,7 @@ async function ensureUserRow(userId: string) {
       billing_cycle: "monthly",
       exports_this_month: 0,
       ai_uses_this_month: 0,
+      ai_latex_uses: 0,
     },
     { onConflict: "id" }
   );
@@ -293,5 +294,16 @@ export async function consumeAIUse(userId: string, actionType: UsageActionType) 
 
   await recordUsage({ userId, actionType });
   await refreshUserCounters(userId);
+}
+
+export async function getAiLatexUses(userId: string): Promise<number> {
+  await ensureUserRow(userId);
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("ai_latex_uses")
+    .eq("id", userId)
+    .single();
+  if (error && !isSingleRowCoercionError(error)) throw error;
+  return Number(data?.ai_latex_uses ?? 0);
 }
 

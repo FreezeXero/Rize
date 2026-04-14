@@ -1,8 +1,9 @@
 export type ResumeSectionEducation = {
   school: string;
+  location?: string;
   degree: string;
-  start: string;
-  end: string;
+  start?: string;
+  end?: string;
   details: string;
 };
 
@@ -12,9 +13,10 @@ export type ResumeBulletSet = {
 
 export type ResumeSectionExperience = {
   company: string;
+  location?: string;
   role: string;
-  start: string;
-  end: string;
+  start?: string;
+  end?: string;
   bullets: string[];
 };
 
@@ -50,6 +52,8 @@ export type ResumeContent = {
   resumeTextScale?: "small" | "normal" | "large";
   /** Ordered section ids: summary, education, experience, projects, leadership, skills, custom:0, … */
   sectionOrder?: string[];
+  /** Optional per-section title overrides keyed by section id. */
+  sectionTitles?: Record<string, string>;
 };
 
 export type ResumeTemplateKey =

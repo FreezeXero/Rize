@@ -15,14 +15,17 @@ export function createSupabaseServerClient() {
 
   return createServerClient(supabaseUrl!, supabaseAnonKey!, {
     cookies: {
-      get(name) {
-        return cookieStore.get(name)?.value;
+      getAll() {
+        return cookieStore.getAll();
       },
-      set(name, value, options) {
-        cookieStore.set({ name, value, ...options });
-      },
-      remove(name, options) {
-        cookieStore.set({ name, value: "", ...options });
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          );
+        } catch {
+          // Silently ignore - called from Server Component where cookies can't be set
+        }
       },
     },
   });

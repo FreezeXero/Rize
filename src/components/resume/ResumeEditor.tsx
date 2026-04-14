@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronUp, Code2, Download, GripVertical, Lock, Plus, RefreshCw, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Code2, Download, GripVertical, Lock, Pencil, Plus, RefreshCw, X } from "lucide-react";
 import type { Plan } from "@/lib/plans";
 import type { ResumeContent, ResumeTemplateKey } from "@/lib/db/resumeTypes";
 import { RESUME_TEMPLATES, templateAllowedForPlan } from "@/lib/templates/resumeTemplates";
@@ -88,13 +88,18 @@ function parseJakeLatexToContent(latex: string, fallback: ResumeContent): Resume
 
   if (eduStart >= 0 && expStart > eduStart) {
     const eduItems = subheadings.filter((s) => s.idx > eduStart && s.idx < expStart);
+    const eduSection = latex.slice(eduStart, expStart);
+    const eduDetails = Array.from(eduSection.matchAll(/\\resumeItem\{([^}]*)\}/g)).map((m) =>
+      stripLatexVisuals(m[1])
+    );
     if (eduItems.length > 0) {
-      next.education = eduItems.map((s) => ({
+      next.education = eduItems.map((s, i) => ({
         school: s.a,
+        location: s.b,
         degree: s.c,
         start: s.d.split("--")[0]?.trim() ?? "",
         end: s.d.split("--")[1]?.trim() ?? "",
-        details: s.b,
+        details: eduDetails[i] ?? "",
       }));
     }
   }
@@ -109,9 +114,10 @@ function parseJakeLatexToContent(latex: string, fallback: ResumeContent): Resume
       const approxPerJob = Math.max(1, Math.floor(bullets.length / expItems.length));
       next.experience = expItems.map((s, i) => ({
         company: s.c,
+        location: s.b,
         role: s.a,
-        start: s.b.split("--")[0]?.trim() ?? "",
-        end: s.b.split("--")[1]?.trim() ?? "",
+        start: s.d.split("--")[0]?.trim() ?? "",
+        end: s.d.split("--")[1]?.trim() ?? "",
         bullets: bullets.slice(i * approxPerJob, i === expItems.length - 1 ? undefined : (i + 1) * approxPerJob),
       }));
     }
@@ -149,12 +155,13 @@ function parseJakeLatexToContent(latex: string, fallback: ResumeContent): Resume
   return withJohnDoeFallback(next);
 }
 
-export function ResumeEditor(props: {
+export default function ResumeEditor(props: {
   userPlan: Plan;
   resumeId: string;
   initialResume: ResumeContent;
   initialTemplate: ResumeTemplateKey;
   initialTitle: string;
+  initialAiLatexUses: number;
 }) {
   const [title, setTitle] = useState(props.initialTitle);
   const [template, setTemplate] = useState<ResumeTemplateKey>(props.initialTemplate);
@@ -169,10 +176,14 @@ export function ResumeEditor(props: {
   const [compiledJakePdfUrl, setCompiledJakePdfUrl] = useState<string | null>(null);
   const [compiledJakeBlob, setCompiledJakeBlob] = useState<Blob | null>(null);
   const [jakeCompileError, setJakeCompileError] = useState<string | null>(null);
+  const [aiLatexUses, setAiLatexUses] = useState(props.initialAiLatexUses ?? 0);
+  const [editingSectionTitleId, setEditingSectionTitleId] = useState<string | null>(null);
+  const [editingSectionTitleDraft, setEditingSectionTitleDraft] = useState("");
   const objectUrlRef = useRef<string | null>(null);
 
   const isJakeTemplate = template === "jakes_latex";
   const canUseEasyJakeMode = isJakeTemplate && props.userPlan !== "free";
+  const isFreeAiLatexLocked = props.userPlan === "free" && aiLatexUses >= 1;
 
   const previewResume = useMemo(() => withJohnDoeFallback(content), [content]);
 
@@ -245,6 +256,75 @@ export function ResumeEditor(props: {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+  }
+
+  async function runAILatexConversion() {
+    try {
+      setIsConvertingLatex(true);
+      const res = await fetch("/api/ai/latex-convert", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ template, content }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        latexSource?: string;
+        error?: string;
+        lockUpgrade?: boolean;
+      };
+      if (!res.ok || !json.latexSource) {
+        throw new Error(json.error ?? "AI LaTeX conversion failed.");
+      }
+      setAiLatexUses((n) => n + 1);
+      setJakeCompileError(null);
+      setContent((prev) => ({ ...prev, latexSource: json.latexSource ?? prev.latexSource }));
+      await refreshJakeCompiledPreview(json.latexSource);
+      setJakeEditorMode("latex");
+    } catch (err: unknown) {
+      setJakeCompileError(err instanceof Error ? err.message : "AI LaTeX conversion failed.");
+    } finally {
+      setIsConvertingLatex(false);
+    }
+  }
+
+  async function goToProCheckout() {
+    const res = await fetch("/api/stripe/create-checkout-session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ plan: "pro", billingCycle: "monthly" }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+    if (!res.ok || !json.url) {
+      throw new Error(json.error ?? "Unable to open checkout.");
+    }
+    window.location.href = json.url;
+  }
+
+  const resolveSectionTitle = useCallback(
+    (sectionId: string, fallback: string) => {
+      const raw = content.sectionTitles?.[sectionId];
+      return typeof raw === "string" && raw.trim() ? raw.trim() : fallback;
+    },
+    [content.sectionTitles]
+  );
+
+  function beginSectionTitleEdit(sectionId: string, fallback: string) {
+    setEditingSectionTitleId(sectionId);
+    setEditingSectionTitleDraft(resolveSectionTitle(sectionId, fallback));
+  }
+
+  function saveSectionTitle(sectionId: string) {
+    const nextTitle = editingSectionTitleDraft.trim();
+    setContent((prev) => {
+      const n = structuredClone(prev);
+      n.sectionTitles = { ...(n.sectionTitles ?? {}) };
+      if (!nextTitle) {
+        delete n.sectionTitles[sectionId];
+      } else {
+        n.sectionTitles[sectionId] = nextTitle;
+      }
+      return n;
+    });
+    setEditingSectionTitleId(null);
   }
 
   const compileJakeLatexToPdf = useCallback(async (latexSource: string) => {
@@ -490,6 +570,37 @@ export function ResumeEditor(props: {
 
                 {jakeEditorMode === "latex" ? (
                   <>
+                    <div className="mt-3">
+                      {isFreeAiLatexLocked ? (
+                        <div className="rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs text-amber-100">
+                          Upgrade to Pro to keep using AI LaTeX conversion.
+                          <div className="mt-2">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  await goToProCheckout();
+                                } catch (err: unknown) {
+                                  alert(err instanceof Error ? err.message : "Unable to open checkout.");
+                                }
+                              }}
+                              className="inline-flex items-center rounded-lg border border-amber-300/40 px-2 py-1 text-[11px] font-semibold text-amber-100 hover:bg-amber-300/10"
+                            >
+                              Upgrade
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => runAILatexConversion()}
+                          className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/40 bg-cyan-300/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-300/15"
+                        >
+                          <RefreshCw size={12} />
+                          AI LaTeX conversion
+                        </button>
+                      )}
+                    </div>
                     <textarea
                       value={content.latexSource ?? ""}
                       onChange={(e) =>
@@ -574,7 +685,34 @@ export function ResumeEditor(props: {
                     <div className="min-w-0 flex-1">
                       {sectionId === "summary" ? (
                         <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                          <div className="text-sm font-semibold text-white">Summary</div>
+                          <div className="flex items-center gap-2">
+                            {editingSectionTitleId === "summary" ? (
+                              <input
+                                value={editingSectionTitleDraft}
+                                onChange={(e) => setEditingSectionTitleDraft(e.target.value)}
+                                onBlur={() => saveSectionTitle("summary")}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") saveSectionTitle("summary");
+                                }}
+                                autoFocus
+                                className="h-8 rounded-lg border border-white/10 bg-black/30 px-2 text-sm font-semibold text-white"
+                              />
+                            ) : (
+                              <>
+                                <div className="text-sm font-semibold text-white">
+                                  {resolveSectionTitle("summary", "Summary")}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => beginSectionTitleEdit("summary", "Summary")}
+                                  className="rounded-md border border-white/10 p-1 text-zinc-300 hover:text-white"
+                                  aria-label="Rename summary section"
+                                >
+                                  <Pencil size={12} />
+                                </button>
+                              </>
+                            )}
+                          </div>
                           <textarea
                             value={content.summary ?? ""}
                             onChange={(e) => setContent((prev) => ({ ...prev, summary: e.target.value }))}
@@ -587,7 +725,34 @@ export function ResumeEditor(props: {
 
                       {sectionId === "education" ? (
                         <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                          <div className="text-sm font-semibold text-white">Education</div>
+                          <div className="flex items-center gap-2">
+                            {editingSectionTitleId === "education" ? (
+                              <input
+                                value={editingSectionTitleDraft}
+                                onChange={(e) => setEditingSectionTitleDraft(e.target.value)}
+                                onBlur={() => saveSectionTitle("education")}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") saveSectionTitle("education");
+                                }}
+                                autoFocus
+                                className="h-8 rounded-lg border border-white/10 bg-black/30 px-2 text-sm font-semibold text-white"
+                              />
+                            ) : (
+                              <>
+                                <div className="text-sm font-semibold text-white">
+                                  {resolveSectionTitle("education", "Education")}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => beginSectionTitleEdit("education", "Education")}
+                                  className="rounded-md border border-white/10 p-1 text-zinc-300 hover:text-white"
+                                  aria-label="Rename education section"
+                                >
+                                  <Pencil size={12} />
+                                </button>
+                              </>
+                            )}
+                          </div>
                           <div className="mt-2 text-xs text-zinc-500">At least one education entry is required.</div>
                           <div className="mt-3 grid gap-3">
                             {content.education.map((ed, idx) => (
@@ -632,30 +797,94 @@ export function ResumeEditor(props: {
                                     className="h-10 rounded-lg border border-white/10 bg-black/30 px-3 text-sm"
                                     placeholder="Degree"
                                   />
-                                  <input
-                                    value={ed.start}
-                                    onChange={(e) =>
-                                      setContent((prev) => {
-                                        const n = structuredClone(prev);
-                                        n.education[idx].start = e.target.value;
-                                        return n;
-                                      })
-                                    }
-                                    className="h-10 rounded-lg border border-white/10 bg-black/30 px-3 text-sm"
-                                    placeholder="Start"
-                                  />
-                                  <input
-                                    value={ed.end}
-                                    onChange={(e) =>
-                                      setContent((prev) => {
-                                        const n = structuredClone(prev);
-                                        n.education[idx].end = e.target.value;
-                                        return n;
-                                      })
-                                    }
-                                    className="h-10 rounded-lg border border-white/10 bg-black/30 px-3 text-sm"
-                                    placeholder="End"
-                                  />
+                                  {ed.start !== undefined ? (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        value={ed.start ?? ""}
+                                        onChange={(e) =>
+                                          setContent((prev) => {
+                                            const n = structuredClone(prev);
+                                            n.education[idx].start = e.target.value;
+                                            return n;
+                                          })
+                                        }
+                                        className="h-10 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 text-sm"
+                                        placeholder="Start"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setContent((prev) => {
+                                            const n = structuredClone(prev);
+                                            delete n.education[idx].start;
+                                            return n;
+                                          })
+                                        }
+                                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/40 text-red-400"
+                                        aria-label="Remove start date"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setContent((prev) => {
+                                          const n = structuredClone(prev);
+                                          n.education[idx].start = "";
+                                          return n;
+                                        })
+                                      }
+                                      className="h-10 rounded-lg border border-dashed border-white/20 px-3 text-xs text-zinc-300"
+                                    >
+                                      Add date
+                                    </button>
+                                  )}
+                                  {ed.end !== undefined ? (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        value={ed.end ?? ""}
+                                        onChange={(e) =>
+                                          setContent((prev) => {
+                                            const n = structuredClone(prev);
+                                            n.education[idx].end = e.target.value;
+                                            return n;
+                                          })
+                                        }
+                                        className="h-10 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 text-sm"
+                                        placeholder="End"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setContent((prev) => {
+                                            const n = structuredClone(prev);
+                                            delete n.education[idx].end;
+                                            return n;
+                                          })
+                                        }
+                                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/40 text-red-400"
+                                        aria-label="Remove end date"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setContent((prev) => {
+                                          const n = structuredClone(prev);
+                                          n.education[idx].end = "";
+                                          return n;
+                                        })
+                                      }
+                                      className="h-10 rounded-lg border border-dashed border-white/20 px-3 text-xs text-zinc-300"
+                                    >
+                                      Add date
+                                    </button>
+                                  )}
                                 </div>
                                 <input
                                   value={ed.details}
@@ -691,7 +920,34 @@ export function ResumeEditor(props: {
                       {sectionId === "experience" ? (
                         <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
                           <div className="flex items-center justify-between">
-                            <div className="text-sm font-semibold text-white">Experience</div>
+                            <div className="flex items-center gap-2">
+                              {editingSectionTitleId === "experience" ? (
+                                <input
+                                  value={editingSectionTitleDraft}
+                                  onChange={(e) => setEditingSectionTitleDraft(e.target.value)}
+                                  onBlur={() => saveSectionTitle("experience")}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") saveSectionTitle("experience");
+                                  }}
+                                  autoFocus
+                                  className="h-8 rounded-lg border border-white/10 bg-black/30 px-2 text-sm font-semibold text-white"
+                                />
+                              ) : (
+                                <>
+                                  <div className="text-sm font-semibold text-white">
+                                    {resolveSectionTitle("experience", "Experience")}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => beginSectionTitleEdit("experience", "Experience")}
+                                    className="rounded-md border border-white/10 p-1 text-zinc-300 hover:text-white"
+                                    aria-label="Rename experience section"
+                                  >
+                                    <Pencil size={12} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                             <button
                               type="button"
                               onClick={() =>
@@ -752,30 +1008,94 @@ export function ResumeEditor(props: {
                                   />
                                 </div>
                                 <div className="mt-2 grid gap-2 md:grid-cols-2">
-                                  <input
-                                    value={exp.start}
-                                    onChange={(e) =>
-                                      setContent((prev) => {
-                                        const n = structuredClone(prev);
-                                        n.experience[idx].start = e.target.value;
-                                        return n;
-                                      })
-                                    }
-                                    className="h-10 rounded-lg border border-white/10 bg-black/30 px-3 text-sm"
-                                    placeholder="Start"
-                                  />
-                                  <input
-                                    value={exp.end}
-                                    onChange={(e) =>
-                                      setContent((prev) => {
-                                        const n = structuredClone(prev);
-                                        n.experience[idx].end = e.target.value;
-                                        return n;
-                                      })
-                                    }
-                                    className="h-10 rounded-lg border border-white/10 bg-black/30 px-3 text-sm"
-                                    placeholder="End"
-                                  />
+                                  {exp.start !== undefined ? (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        value={exp.start ?? ""}
+                                        onChange={(e) =>
+                                          setContent((prev) => {
+                                            const n = structuredClone(prev);
+                                            n.experience[idx].start = e.target.value;
+                                            return n;
+                                          })
+                                        }
+                                        className="h-10 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 text-sm"
+                                        placeholder="Start"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setContent((prev) => {
+                                            const n = structuredClone(prev);
+                                            delete n.experience[idx].start;
+                                            return n;
+                                          })
+                                        }
+                                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/40 text-red-400"
+                                        aria-label="Remove start date"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setContent((prev) => {
+                                          const n = structuredClone(prev);
+                                          n.experience[idx].start = "";
+                                          return n;
+                                        })
+                                      }
+                                      className="h-10 rounded-lg border border-dashed border-white/20 px-3 text-xs text-zinc-300"
+                                    >
+                                      Add date
+                                    </button>
+                                  )}
+                                  {exp.end !== undefined ? (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        value={exp.end ?? ""}
+                                        onChange={(e) =>
+                                          setContent((prev) => {
+                                            const n = structuredClone(prev);
+                                            n.experience[idx].end = e.target.value;
+                                            return n;
+                                          })
+                                        }
+                                        className="h-10 flex-1 rounded-lg border border-white/10 bg-black/30 px-3 text-sm"
+                                        placeholder="End"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setContent((prev) => {
+                                            const n = structuredClone(prev);
+                                            delete n.experience[idx].end;
+                                            return n;
+                                          })
+                                        }
+                                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-red-500/40 text-red-400"
+                                        aria-label="Remove end date"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setContent((prev) => {
+                                          const n = structuredClone(prev);
+                                          n.experience[idx].end = "";
+                                          return n;
+                                        })
+                                      }
+                                      className="h-10 rounded-lg border border-dashed border-white/20 px-3 text-xs text-zinc-300"
+                                    >
+                                      Add date
+                                    </button>
+                                  )}
                                 </div>
                                 <div className="mt-2 grid gap-2">
                                   {exp.bullets.map((b, bIdx) => (
@@ -887,7 +1207,34 @@ export function ResumeEditor(props: {
                       {sectionId === "projects" ? (
                         <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
                           <div className="flex items-center justify-between">
-                            <div className="text-sm font-semibold text-white">Projects</div>
+                            <div className="flex items-center gap-2">
+                              {editingSectionTitleId === "projects" ? (
+                                <input
+                                  value={editingSectionTitleDraft}
+                                  onChange={(e) => setEditingSectionTitleDraft(e.target.value)}
+                                  onBlur={() => saveSectionTitle("projects")}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") saveSectionTitle("projects");
+                                  }}
+                                  autoFocus
+                                  className="h-8 rounded-lg border border-white/10 bg-black/30 px-2 text-sm font-semibold text-white"
+                                />
+                              ) : (
+                                <>
+                                  <div className="text-sm font-semibold text-white">
+                                    {resolveSectionTitle("projects", "Projects")}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => beginSectionTitleEdit("projects", "Projects")}
+                                    className="rounded-md border border-white/10 p-1 text-zinc-300 hover:text-white"
+                                    aria-label="Rename projects section"
+                                  >
+                                    <Pencil size={12} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                             <button
                               type="button"
                               onClick={() =>
@@ -1053,7 +1400,34 @@ export function ResumeEditor(props: {
 
                       {sectionId === "skills" ? (
                         <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
-                          <div className="text-sm font-semibold text-white">Skills</div>
+                          <div className="flex items-center gap-2">
+                            {editingSectionTitleId === "skills" ? (
+                              <input
+                                value={editingSectionTitleDraft}
+                                onChange={(e) => setEditingSectionTitleDraft(e.target.value)}
+                                onBlur={() => saveSectionTitle("skills")}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") saveSectionTitle("skills");
+                                }}
+                                autoFocus
+                                className="h-8 rounded-lg border border-white/10 bg-black/30 px-2 text-sm font-semibold text-white"
+                              />
+                            ) : (
+                              <>
+                                <div className="text-sm font-semibold text-white">
+                                  {resolveSectionTitle("skills", "Skills")}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => beginSectionTitleEdit("skills", "Skills")}
+                                  className="rounded-md border border-white/10 p-1 text-zinc-300 hover:text-white"
+                                  aria-label="Rename skills section"
+                                >
+                                  <Pencil size={12} />
+                                </button>
+                              </>
+                            )}
+                          </div>
                           <input
                             value={content.skills.join(", ")}
                             onChange={(e) => setContent((prev) => ({ ...prev, skills: parseSkills(e.target.value) }))}
@@ -1161,8 +1535,8 @@ export function ResumeEditor(props: {
         </div>
 
         {/* Right panel: fixed preview */}
-        <div className="h-full min-w-0">
-          <div className="sticky top-0 flex h-full flex-col gap-4">
+        <div className="h-full min-w-0 overflow-y-auto">
+          <div className="sticky top-0 flex h-[calc(100vh-100px)] flex-col gap-4">
             <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div className="text-sm font-semibold text-white">Live preview</div>
@@ -1175,7 +1549,8 @@ export function ResumeEditor(props: {
               <ResumePreview
                 resume={previewResume}
                 template={template}
-                compiledPdfUrl={isJakeTemplate ? compiledJakePdfUrl : null}
+                compiledPdfUrl={isJakeTemplate ? compiledJakePdfUrl : undefined}
+                compileError={isJakeTemplate ? jakeCompileError : null}
                 compiling={isJakeTemplate && isConvertingLatex}
               />
               {isJakeTemplate ? (

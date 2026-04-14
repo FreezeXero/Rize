@@ -10,6 +10,7 @@ export const JOHN_DOE_SAMPLE_CONTENT: ResumeContent = {
   education: [
     {
       school: "University of Washington",
+      location: "Seattle, WA",
       degree: "B.S. Computer Science, GPA 3.8",
       start: "Sept 2021",
       end: "Jun 2025",
@@ -20,6 +21,7 @@ export const JOHN_DOE_SAMPLE_CONTENT: ResumeContent = {
   experience: [
     {
       company: "Stripe",
+      location: "San Francisco, CA",
       role: "Software Engineer Intern",
       start: "Jun 2024",
       end: "Aug 2024",
@@ -31,6 +33,7 @@ export const JOHN_DOE_SAMPLE_CONTENT: ResumeContent = {
     },
     {
       company: "Databricks",
+      location: "San Francisco, CA",
       role: "Software Engineering Intern",
       start: "May 2023",
       end: "Aug 2023",
@@ -42,6 +45,7 @@ export const JOHN_DOE_SAMPLE_CONTENT: ResumeContent = {
     },
     {
       company: "University of Washington — Paul G. Allen School",
+      location: "Seattle, WA",
       role: "Undergraduate Teaching Assistant (CSE 331)",
       start: "Jan 2024",
       end: "Jun 2024",
@@ -87,6 +91,7 @@ export const JAKES_SAMPLE_CONTENT: ResumeContent = {
   education: [
     {
       school: "University of Michigan",
+      location: "Ann Arbor, MI",
       degree: "B.S. in Computer Science, GPA: 3.84/4.00",
       start: "Aug 2021",
       end: "Jun 2026",
@@ -97,6 +102,7 @@ export const JAKES_SAMPLE_CONTENT: ResumeContent = {
   experience: [
     {
       company: "Amazon",
+      location: "Seattle, WA",
       role: "Software Development Engineer Intern",
       start: "Jun 2025",
       end: "Aug 2025",
@@ -108,6 +114,7 @@ export const JAKES_SAMPLE_CONTENT: ResumeContent = {
     },
     {
       company: "Capital One",
+      location: "McLean, VA",
       role: "Software Engineering Intern",
       start: "May 2024",
       end: "Aug 2024",
@@ -119,6 +126,7 @@ export const JAKES_SAMPLE_CONTENT: ResumeContent = {
     },
     {
       company: "University of Michigan ITS",
+      location: "Ann Arbor, MI",
       role: "Software Engineer (Part-time)",
       start: "Sep 2023",
       end: "Apr 2024",
@@ -194,6 +202,7 @@ export function withJakesSampleFallback(input: ResumeContent): ResumeContent {
     customSections: input.customSections ?? [],
     resumeTextScale: input.resumeTextScale ?? "normal",
     sectionOrder: input.sectionOrder,
+    sectionTitles: input.sectionTitles ?? {},
   };
 }
 
@@ -215,5 +224,6 @@ export function withJohnDoeFallback(input: ResumeContent): ResumeContent {
     customSections: input.customSections ?? [],
     resumeTextScale: input.resumeTextScale ?? "normal",
     sectionOrder: input.sectionOrder,
+    sectionTitles: input.sectionTitles ?? {},
   };
 }
