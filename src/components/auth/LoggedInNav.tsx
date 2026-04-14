@@ -6,15 +6,15 @@ import { ChevronDown } from "lucide-react";
 
 const SAMPLE_MAJORS = [
   { href: "/samples/computer-science", label: "Computer Science" },
-  { href: "/samples/business", label: "Business" },
-  { href: "/samples/engineering", label: "Engineering" },
-  { href: "/samples/marketing", label: "Marketing" },
-  { href: "/samples/finance", label: "Finance" },
+  { href: "/samples/electrical-engineering", label: "Electrical Engineering" },
+  { href: "/samples/mechanical-engineering", label: "Mechanical Engineering" },
+  { href: "/samples/civil-engineering", label: "Civil Engineering" },
   { href: "/samples/data-science", label: "Data Science" },
-  { href: "/samples/design", label: "Design" },
-  { href: "/samples/pre-med", label: "Pre-Med" },
-  { href: "/samples/law", label: "Law" },
-  { href: "/samples/education", label: "Education" },
+  { href: "/samples/finance", label: "Finance" },
+  { href: "/samples/biology", label: "Biology" },
+  { href: "/samples/psychology", label: "Psychology" },
+  { href: "/samples/marketing", label: "Marketing" },
+  { href: "/samples/political-science", label: "Political Science" },
 ] as const;
 
 const RESOURCE_LINKS = [

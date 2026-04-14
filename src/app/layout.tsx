@@ -18,6 +18,9 @@ export const metadata: Metadata = {
   title: "Rize - AI Resume Builder",
   description:
     "Rize helps you build a standout resume with AI rewrites, ATS insights, and clean exports.",
+  icons: {
+    icon: "/logo.svg",
+  },
 };
 
 export default function RootLayout({
