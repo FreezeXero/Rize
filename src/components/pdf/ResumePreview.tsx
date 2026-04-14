@@ -13,6 +13,7 @@ export function ResumePreview(props: {
   resume: ResumeContent;
   template: ResumeTemplateKey;
   compiledPdfUrl?: string | null;
+  compileError?: string | null;
   /** When true, shows a compiling overlay (Jake LaTeX path). */
   compiling?: boolean;
 }) {
@@ -61,16 +62,30 @@ export function ResumePreview(props: {
     </div>
   );
 
-  if (props.compiledPdfUrl) {
-    const src = props.compiledPdfUrl.includes("#")
-      ? props.compiledPdfUrl
-      : `${props.compiledPdfUrl}#toolbar=0`;
+  if (props.compiledPdfUrl !== undefined) {
+    if (props.compiledPdfUrl) {
+      const src = props.compiledPdfUrl.includes("#")
+        ? props.compiledPdfUrl
+        : `${props.compiledPdfUrl}#toolbar=0`;
+      return scaledShell(
+        <iframe
+          title="Compiled LaTeX preview"
+          src={src}
+          className="h-full w-full min-w-0 border-0 bg-white"
+        />
+      );
+    }
+    if (props.compileError) {
+      return scaledShell(
+        <div className="flex h-full w-full items-center justify-center px-4 text-center text-sm text-red-300">
+          LaTeX compilation failed: {props.compileError}
+        </div>
+      );
+    }
     return scaledShell(
-      <iframe
-        title="Compiled LaTeX preview"
-        src={src}
-        className="h-full w-full min-w-0 border-0 bg-white"
-      />
+      <div className="flex h-full w-full items-center justify-center px-4 text-center text-sm text-zinc-300">
+        Waiting for LaTeX preview...
+      </div>
     );
   }
 
