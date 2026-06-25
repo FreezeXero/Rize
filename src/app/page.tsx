@@ -10,7 +10,7 @@ export default async function Home() {
   return (
     <>
       <PublicLandingPage />
-      <FooterSection variant="full" />
+      <FooterSection />
     </>
   );
 }

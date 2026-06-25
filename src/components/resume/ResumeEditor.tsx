@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { Bold, ChevronDown, ChevronUp, Code2, Download, GripVertical, Italic, Loader2, Lock, Pencil, Plus, Sparkles, Trash2, Type, Underline, X } from "lucide-react";
 import type { Plan } from "@/lib/plans";
 import type { ResumeContent, ResumeTemplateKey } from "@/lib/db/resumeTypes";
@@ -185,12 +184,6 @@ export default function ResumeEditor(props: {
   const [editingSectionTitleDraft, setEditingSectionTitleDraft] = useState("");
   const [weeklyAIRewrites, setWeeklyAIRewrites] = useState(props.initialWeeklyAIRewrites ?? 0);
   const [rewritingBulletKey, setRewritingBulletKey] = useState<string | null>(null);
-  const [activeBulletField, setActiveBulletField] = useState<{
-    type: "exp" | "proj";
-    idx: number;
-    bIdx: number;
-  } | null>(null);
-  const activeTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const selectionRef = useRef<{
     el: HTMLTextAreaElement;
     fieldType: "exp" | "proj";

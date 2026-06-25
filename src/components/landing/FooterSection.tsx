@@ -39,7 +39,7 @@ const RESOURCE_LINKS = [
   { href: "/help#faq", label: "FAQ" },
 ];
 
-export function FooterSection(_props: { variant?: "full" | "minimal" }) {
+export function FooterSection() {
   return (
     <footer className="mt-16 border-t border-white/[.06] bg-[#080810]">
       <div className="mx-auto max-w-6xl px-4 py-14 md:px-6">
