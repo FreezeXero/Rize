@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronUp, Code2, Download, GripVertical, Lock, Pencil, Plus, RefreshCw, X } from "lucide-react";
+import { Bold, ChevronDown, ChevronUp, Code2, Download, GripVertical, Italic, Loader2, Lock, Pencil, Plus, Sparkles, Trash2, Type, Underline, X } from "lucide-react";
 import type { Plan } from "@/lib/plans";
 import type { ResumeContent, ResumeTemplateKey } from "@/lib/db/resumeTypes";
 import { RESUME_TEMPLATES, templateAllowedForPlan } from "@/lib/templates/resumeTemplates";
@@ -26,21 +26,26 @@ function parseSkills(input: string) {
 }
 
 function mergeEditorSectionOrder(content: ResumeContent): string[] {
+  const hidden = new Set(content.hiddenSections ?? []);
   const full = defaultSectionOrder(content);
   const stored = content.sectionOrder?.filter(Boolean) ?? [];
-  if (stored.length === 0) return full;
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const id of stored) {
-    if (full.includes(id) && !seen.has(id)) {
-      out.push(id);
-      seen.add(id);
+  let out: string[];
+  if (stored.length === 0) {
+    out = full;
+  } else {
+    const seen = new Set<string>();
+    out = [];
+    for (const id of stored) {
+      if (full.includes(id) && !seen.has(id)) {
+        out.push(id);
+        seen.add(id);
+      }
+    }
+    for (const id of full) {
+      if (!seen.has(id)) out.push(id);
     }
   }
-  for (const id of full) {
-    if (!seen.has(id)) out.push(id);
-  }
-  return out;
+  return out.filter((id) => !hidden.has(id));
 }
 
 function stripLatexVisuals(input: string) {
@@ -162,6 +167,7 @@ export default function ResumeEditor(props: {
   initialTemplate: ResumeTemplateKey;
   initialTitle: string;
   initialAiLatexUses: number;
+  initialWeeklyAIRewrites: number;
 }) {
   const [title, setTitle] = useState(props.initialTitle);
   const [template, setTemplate] = useState<ResumeTemplateKey>(props.initialTemplate);
@@ -169,9 +175,7 @@ export default function ResumeEditor(props: {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "saving">("idle");
-  const [jakeEditorMode, setJakeEditorMode] = useState<JakeEditorMode>(
-    props.userPlan === "free" ? "latex" : "easy"
-  );
+  const [jakeEditorMode, setJakeEditorMode] = useState<JakeEditorMode>("easy");
   const [isConvertingLatex, setIsConvertingLatex] = useState(false);
   const [compiledJakePdfUrl, setCompiledJakePdfUrl] = useState<string | null>(null);
   const [compiledJakeBlob, setCompiledJakeBlob] = useState<Blob | null>(null);
@@ -179,10 +183,29 @@ export default function ResumeEditor(props: {
   const [aiLatexUses, setAiLatexUses] = useState(props.initialAiLatexUses ?? 0);
   const [editingSectionTitleId, setEditingSectionTitleId] = useState<string | null>(null);
   const [editingSectionTitleDraft, setEditingSectionTitleDraft] = useState("");
+  const [weeklyAIRewrites, setWeeklyAIRewrites] = useState(props.initialWeeklyAIRewrites ?? 0);
+  const [rewritingBulletKey, setRewritingBulletKey] = useState<string | null>(null);
+  const [activeBulletField, setActiveBulletField] = useState<{
+    type: "exp" | "proj";
+    idx: number;
+    bIdx: number;
+  } | null>(null);
+  const activeTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const selectionRef = useRef<{
+    el: HTMLTextAreaElement;
+    fieldType: "exp" | "proj";
+    idx: number;
+    bIdx: number;
+    start: number;
+    end: number;
+    value: string;
+  } | null>(null);
   const objectUrlRef = useRef<string | null>(null);
 
   const isJakeTemplate = template === "jakes_latex";
-  const canUseEasyJakeMode = isJakeTemplate && props.userPlan !== "free";
+  const canUseEasyJakeMode = isJakeTemplate;
+
+  const weeklyRewriteLimit = props.userPlan === "max" ? null : props.userPlan === "pro" ? 100 : 10;
   const isFreeAiLatexLocked = props.userPlan === "free" && aiLatexUses >= 1;
 
   const previewResume = useMemo(() => withJohnDoeFallback(content), [content]);
@@ -364,29 +387,36 @@ export default function ResumeEditor(props: {
     context: string;
     currentBullet: string;
   }) {
-    const res = await fetch("/api/ai/rewrite", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        bullet: args.currentBullet,
-        section: args.section,
-        context: args.context,
-      }),
-    });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error ?? "AI rewrite failed");
-    const rewritten = String(json.rewrittenBullet ?? "");
-    if (!rewritten) throw new Error("Claude returned an empty rewrite.");
+    const bulletKey = `${args.section}-${args.index}-${args.bulletIndex}`;
+    setRewritingBulletKey(bulletKey);
+    try {
+      const res = await fetch("/api/ai/rewrite", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          bullet: args.currentBullet,
+          section: args.section,
+          context: args.context,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.error ?? "AI rewrite failed");
+      const rewritten = String(json.rewrittenBullet ?? "");
+      if (!rewritten) throw new Error("Claude returned an empty rewrite.");
 
-    setContent((prev) => {
-      const next = structuredClone(prev);
-      if (args.section === "experience") {
-        next.experience[args.index].bullets[args.bulletIndex] = rewritten;
-      } else {
-        next.projects[args.index].bullets[args.bulletIndex] = rewritten;
-      }
-      return next;
-    });
+      setWeeklyAIRewrites((n) => n + 1);
+      setContent((prev) => {
+        const next = structuredClone(prev);
+        if (args.section === "experience") {
+          next.experience[args.index].bullets[args.bulletIndex] = rewritten;
+        } else {
+          next.projects[args.index].bullets[args.bulletIndex] = rewritten;
+        }
+        return next;
+      });
+    } finally {
+      setRewritingBulletKey(null);
+    }
   }
 
   // Easy mode: keep official Jake template source synced from form data.
@@ -488,6 +518,54 @@ export default function ResumeEditor(props: {
     }));
   }
 
+  function hideSection(sectionId: string) {
+    setContent((prev) => ({
+      ...prev,
+      hiddenSections: [...(prev.hiddenSections ?? []).filter((id) => id !== sectionId), sectionId],
+    }));
+  }
+
+  function restoreSection(sectionId: string) {
+    setContent((prev) => ({
+      ...prev,
+      hiddenSections: (prev.hiddenSections ?? []).filter((id) => id !== sectionId),
+    }));
+  }
+
+  function applyFormat(fmt: "bold" | "italic" | "underline" | "mono" | "smallcaps") {
+    const sel = selectionRef.current;
+    if (!sel) return;
+    const { el, fieldType, idx, bIdx, start, end, value } = sel;
+
+    const commands: Record<string, string> = {
+      bold: "\\textbf",
+      italic: "\\textit",
+      underline: "\\underline",
+      mono: "\\texttt",
+      smallcaps: "\\textsc",
+    };
+    const cmd = commands[fmt] ?? "\\textbf";
+    const selected = value.slice(start, end) || "text";
+    const replacement = `${cmd}{${selected}}`;
+    const next = value.slice(0, start) + replacement + value.slice(end);
+
+    setContent((prev) => {
+      const n = structuredClone(prev);
+      if (fieldType === "exp") {
+        n.experience[idx].bullets[bIdx] = next;
+      } else {
+        n.projects[idx].bullets[bIdx] = next;
+      }
+      return n;
+    });
+
+    // After React flushes the update, restore focus and cursor position.
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + replacement.length, start + replacement.length);
+    });
+  }
+
   function removeCustomSection(index: number) {
     if (!confirm("Remove this custom section?")) return;
     setContent((prev) => {
@@ -501,7 +579,7 @@ export default function ResumeEditor(props: {
   return (
     <div className="h-[calc(100vh-76px)] w-full overflow-hidden rounded-none border border-white/10 bg-white/5 p-2 md:p-3">
       <div className="grid h-full min-w-0 gap-3 lg:grid-cols-[2fr_3fr]">
-        {/* Left panel: independent scroll */}
+        {/* Left panel: single scrollable column */}
         <div className="h-full min-w-0 overflow-y-auto pr-1">
           <div className="flex flex-col gap-4 pb-4">
             <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
@@ -529,16 +607,39 @@ export default function ResumeEditor(props: {
               <SaveStatus status={saveStatus} error={saveError} />
             </div>
 
+            {/* Formatting toolbar — sticky inside the scrollable column */}
+            <div className="sticky top-0 z-10 flex flex-wrap items-center gap-1 rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
+              <span className="mr-1 text-xs text-zinc-500">Format:</span>
+              {(
+                [
+                  { fmt: "bold" as const, icon: <Bold size={13} />, label: "Bold (\\textbf{})" },
+                  { fmt: "italic" as const, icon: <Italic size={13} />, label: "Italic (\\textit{})" },
+                  { fmt: "underline" as const, icon: <Underline size={13} />, label: "Underline (\\underline{})" },
+                  { fmt: "mono" as const, icon: <Type size={13} />, label: "Monospace (\\texttt{})" },
+                ] as const
+              ).map(({ fmt, icon, label }) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  title={label}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    applyFormat(fmt);
+                  }}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-black/20 text-zinc-300 hover:border-cyan-300/40 hover:text-cyan-100"
+                >
+                  {icon}
+                </button>
+              ))}
+              <span className="ml-2 text-[10px] text-zinc-600">Select text in a bullet, then click</span>
+            </div>
+
             {isJakeTemplate ? (
               <div className="rounded-3xl border border-white/10 bg-black/20 p-5">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold text-white">Jake&apos;s Resume editor</div>
-                    <div className="mt-1 text-xs text-zinc-400">
-                      {props.userPlan === "free"
-                        ? "Free plan: raw LaTeX mode only"
-                        : "Pro/Max: switch between Easy mode and raw LaTeX mode"}
-                    </div>
+                    <div className="mt-1 text-xs text-zinc-400">Switch between Easy mode and raw LaTeX editing.</div>
                   </div>
                   {canUseEasyJakeMode ? (
                     <div className="inline-flex rounded-xl border border-white/10 bg-black/20 p-1">
@@ -596,7 +697,7 @@ export default function ResumeEditor(props: {
                           onClick={() => runAILatexConversion()}
                           className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/40 bg-cyan-300/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-300/15"
                         >
-                          <RefreshCw size={12} />
+                          <Sparkles size={12} />
                           AI LaTeX conversion
                         </button>
                       )}
@@ -710,6 +811,14 @@ export default function ResumeEditor(props: {
                                 >
                                   <Pencil size={12} />
                                 </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { if (confirm("Hide the Summary section?")) hideSection("summary"); }}
+                                  className="rounded-md border border-red-500/30 p-1 text-red-400 hover:bg-red-500/10"
+                                  title="Hide section"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
                               </>
                             )}
                           </div>
@@ -749,6 +858,15 @@ export default function ResumeEditor(props: {
                                   aria-label="Rename education section"
                                 >
                                   <Pencil size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { if (confirm("Hide the Education section?")) hideSection("education"); }}
+                                  className="rounded-md border border-red-500/30 p-1 text-red-400 hover:bg-red-500/10"
+                                  aria-label="Hide education section"
+                                  title="Hide section"
+                                >
+                                  <Trash2 size={12} />
                                 </button>
                               </>
                             )}
@@ -945,6 +1063,15 @@ export default function ResumeEditor(props: {
                                   >
                                     <Pencil size={12} />
                                   </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { if (confirm("Hide the Experience section?")) hideSection("experience"); }}
+                                    className="rounded-md border border-red-500/30 p-1 text-red-400 hover:bg-red-500/10"
+                                    aria-label="Hide experience section"
+                                    title="Hide section"
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
                                 </>
                               )}
                             </div>
@@ -1098,6 +1225,11 @@ export default function ResumeEditor(props: {
                                   )}
                                 </div>
                                 <div className="mt-2 grid gap-2">
+                                  {weeklyRewriteLimit !== null && (
+                                    <div className="text-[11px] text-zinc-500">
+                                      {weeklyAIRewrites}/{weeklyRewriteLimit} AI rewrites used this week
+                                    </div>
+                                  )}
                                   {exp.bullets.map((b, bIdx) => (
                                     <div key={bIdx} className="flex gap-2">
                                       <button
@@ -1150,20 +1282,38 @@ export default function ResumeEditor(props: {
                                           <ChevronDown size={14} />
                                         </button>
                                       </div>
-                                      <textarea
-                                        rows={2}
-                                        value={b}
-                                        onChange={(e) =>
-                                          setContent((prev) => {
-                                            const n = structuredClone(prev);
-                                            n.experience[idx].bullets[bIdx] = e.target.value;
-                                            return n;
-                                          })
-                                        }
-                                        className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm"
-                                      />
+                                      <div className="relative flex-1">
+                                        <textarea
+                                          rows={2}
+                                          value={b}
+                                          onSelect={(e) => {
+                                            const el = e.currentTarget;
+                                            selectionRef.current = { el, fieldType: "exp", idx, bIdx, start: el.selectionStart ?? 0, end: el.selectionEnd ?? 0, value: el.value };
+                                          }}
+                                          onKeyUp={(e) => {
+                                            const el = e.currentTarget;
+                                            selectionRef.current = { el, fieldType: "exp", idx, bIdx, start: el.selectionStart ?? 0, end: el.selectionEnd ?? 0, value: el.value };
+                                          }}
+                                          onChange={(e) =>
+                                            setContent((prev) => {
+                                              const n = structuredClone(prev);
+                                              n.experience[idx].bullets[bIdx] = e.target.value;
+                                              return n;
+                                            })
+                                          }
+                                          disabled={rewritingBulletKey === `experience-${idx}-${bIdx}`}
+                                          className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm disabled:opacity-50"
+                                        />
+                                        {rewritingBulletKey === `experience-${idx}-${bIdx}` && (
+                                          <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-black/40">
+                                            <Loader2 size={16} className="animate-spin text-violet-300" />
+                                          </div>
+                                        )}
+                                      </div>
                                       <button
                                         type="button"
+                                        title="AI Rewrite"
+                                        disabled={rewritingBulletKey !== null}
                                         onClick={async () => {
                                           try {
                                             await rewriteBullet({
@@ -1177,9 +1327,9 @@ export default function ResumeEditor(props: {
                                             alert(err instanceof Error ? err.message : "Rewrite failed");
                                           }
                                         }}
-                                        className="inline-flex h-10 items-center rounded-lg border border-white/10 px-3 text-xs"
+                                        className="inline-flex h-10 items-center rounded-lg border border-violet-400/30 bg-violet-400/10 px-3 text-violet-300 hover:bg-violet-400/20 disabled:opacity-40"
                                       >
-                                        <RefreshCw size={14} />
+                                        <Sparkles size={14} />
                                       </button>
                                     </div>
                                   ))}
@@ -1231,6 +1381,15 @@ export default function ResumeEditor(props: {
                                     aria-label="Rename projects section"
                                   >
                                     <Pencil size={12} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => { if (confirm("Hide the Projects section?")) hideSection("projects"); }}
+                                    className="rounded-md border border-red-500/30 p-1 text-red-400 hover:bg-red-500/10"
+                                    aria-label="Hide projects section"
+                                    title="Hide section"
+                                  >
+                                    <Trash2 size={12} />
                                   </button>
                                 </>
                               )}
@@ -1292,6 +1451,11 @@ export default function ResumeEditor(props: {
                                   />
                                 </div>
                                 <div className="mt-2 grid gap-2">
+                                  {weeklyRewriteLimit !== null && (
+                                    <div className="text-[11px] text-zinc-500">
+                                      {weeklyAIRewrites}/{weeklyRewriteLimit} AI rewrites used this week
+                                    </div>
+                                  )}
                                   {p.bullets.map((b, bIdx) => (
                                     <div key={bIdx} className="flex gap-2">
                                       <button
@@ -1344,20 +1508,38 @@ export default function ResumeEditor(props: {
                                           <ChevronDown size={14} />
                                         </button>
                                       </div>
-                                      <textarea
-                                        rows={2}
-                                        value={b}
-                                        onChange={(e) =>
-                                          setContent((prev) => {
-                                            const n = structuredClone(prev);
-                                            n.projects[idx].bullets[bIdx] = e.target.value;
-                                            return n;
-                                          })
-                                        }
-                                        className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm"
-                                      />
+                                      <div className="relative flex-1">
+                                        <textarea
+                                          rows={2}
+                                          value={b}
+                                          onSelect={(e) => {
+                                            const el = e.currentTarget;
+                                            selectionRef.current = { el, fieldType: "proj", idx, bIdx, start: el.selectionStart ?? 0, end: el.selectionEnd ?? 0, value: el.value };
+                                          }}
+                                          onKeyUp={(e) => {
+                                            const el = e.currentTarget;
+                                            selectionRef.current = { el, fieldType: "proj", idx, bIdx, start: el.selectionStart ?? 0, end: el.selectionEnd ?? 0, value: el.value };
+                                          }}
+                                          onChange={(e) =>
+                                            setContent((prev) => {
+                                              const n = structuredClone(prev);
+                                              n.projects[idx].bullets[bIdx] = e.target.value;
+                                              return n;
+                                            })
+                                          }
+                                          disabled={rewritingBulletKey === `project-${idx}-${bIdx}`}
+                                          className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm disabled:opacity-50"
+                                        />
+                                        {rewritingBulletKey === `project-${idx}-${bIdx}` && (
+                                          <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-black/40">
+                                            <Loader2 size={16} className="animate-spin text-violet-300" />
+                                          </div>
+                                        )}
+                                      </div>
                                       <button
                                         type="button"
+                                        title="AI Rewrite"
+                                        disabled={rewritingBulletKey !== null}
                                         onClick={async () => {
                                           try {
                                             await rewriteBullet({
@@ -1371,9 +1553,9 @@ export default function ResumeEditor(props: {
                                             alert(err instanceof Error ? err.message : "Rewrite failed");
                                           }
                                         }}
-                                        className="inline-flex h-10 items-center rounded-lg border border-white/10 px-3 text-xs"
+                                        className="inline-flex h-10 items-center rounded-lg border border-violet-400/30 bg-violet-400/10 px-3 text-violet-300 hover:bg-violet-400/20 disabled:opacity-40"
                                       >
-                                        <RefreshCw size={14} />
+                                        <Sparkles size={14} />
                                       </button>
                                     </div>
                                   ))}
@@ -1424,6 +1606,14 @@ export default function ResumeEditor(props: {
                                   aria-label="Rename skills section"
                                 >
                                   <Pencil size={12} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { if (confirm("Hide the Skills section?")) hideSection("skills"); }}
+                                  className="rounded-md border border-red-500/30 p-1 text-red-400 hover:bg-red-500/10"
+                                  title="Hide section"
+                                >
+                                  <Trash2 size={12} />
                                 </button>
                               </>
                             )}
@@ -1498,6 +1688,25 @@ export default function ResumeEditor(props: {
                   <Plus size={16} />
                   Add custom section
                 </button>
+
+                {(content.hiddenSections ?? []).length > 0 && (
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <div className="mb-2 text-xs text-zinc-500">Hidden sections — click to restore:</div>
+                    <div className="flex flex-wrap gap-2">
+                      {(content.hiddenSections ?? []).map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => restoreSection(id)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-xs text-zinc-300 hover:border-cyan-300/40 hover:text-white"
+                        >
+                          <Plus size={11} />
+                          {id.replace("custom:", "Custom #")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -1538,13 +1747,8 @@ export default function ResumeEditor(props: {
         <div className="h-full min-w-0 overflow-y-auto">
           <div className="sticky top-0 flex h-[calc(100vh-100px)] flex-col gap-4">
             <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
-              <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="mb-3">
                 <div className="text-sm font-semibold text-white">Live preview</div>
-                <div className="text-right text-xs text-zinc-400">
-                  {isJakeTemplate
-                    ? "Compiles 1.5s after you stop typing"
-                    : "Updates as you edit"}
-                </div>
               </div>
               <ResumePreview
                 resume={previewResume}
@@ -1578,11 +1782,7 @@ export default function ResumeEditor(props: {
                 <Download className="mr-2" size={16} />
                 Export to PDF
               </button>
-              {isJakeTemplate && props.userPlan === "free" ? (
-                <div className="mt-3 text-xs text-zinc-500">
-                  Want Easy mode auto-LaTeX? <Link href="/pricing" className="text-cyan-300 hover:underline">Upgrade to Pro</Link>.
-                </div>
-              ) : null}
+              {null}
             </div>
           </div>
         </div>

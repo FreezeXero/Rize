@@ -67,27 +67,6 @@ export function jakesLatexFromContentPrompt(content: ResumeContent) {
 export function atsSuggestionPrompt(args: {
   jobDescription: string;
   resumeText: string;
-  mode: "basic" | "full";
 }) {
-  return [
-    "You are an ATS (Applicant Tracking System) resume coach.",
-    "Given a job description and resume text, identify missing keywords and suggest improvements.",
-    "",
-    `Mode: ${args.mode}`,
-    "",
-    "Job description:",
-    args.jobDescription,
-    "",
-    "Resume text:",
-    args.resumeText,
-    "",
-    "Respond with:",
-    '- A JSON object only with keys:',
-    '  - "matchPercentage" (number 0-100)',
-    '  - "missingKeywords" (string[])',
-    '  - "topSuggestions" (string[])',
-    ...(args.mode === "full" ? ['  - "detailedReport" (string)'] : []),
-  ]
-    .flat()
-    .join("\n");
+  return `Job Posting:\n${args.jobDescription}\n\nResume:\n${args.resumeText}`;
 }

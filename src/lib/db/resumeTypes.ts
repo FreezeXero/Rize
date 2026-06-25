@@ -54,6 +54,8 @@ export type ResumeContent = {
   sectionOrder?: string[];
   /** Optional per-section title overrides keyed by section id. */
   sectionTitles?: Record<string, string>;
+  /** Section ids that have been hidden by the user (e.g. "summary", "skills"). */
+  hiddenSections?: string[];
 };
 
 export type ResumeTemplateKey =

@@ -3,30 +3,32 @@
 @tailwind utilities;
 
 :root {
-  --background: #070e1c;
+  --background: #080810;
   --foreground: #e4e4e7;
+  --accent-cyan: #22d3ee;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #070e1c;
+    --background: #080810;
     --foreground: #e4e4e7;
+    --accent-cyan: #22d3ee;
   }
 }
 
 body {
   color: var(--foreground);
   background: radial-gradient(
-      ellipse 60% 50% at 50% -10%,
-      rgba(59, 130, 246, 0.18),
-      transparent 58%
+      ellipse 65% 55% at 50% -8%,
+      rgba(34, 211, 238, 0.16),
+      transparent 55%
     ),
     radial-gradient(
-      ellipse 60% 50% at 20% 90%,
-      rgba(34, 211, 238, 0.1),
-      transparent 58%
+      ellipse 55% 50% at 15% 95%,
+      rgba(139, 92, 246, 0.09),
+      transparent 55%
     ),
-    linear-gradient(to bottom, #08112a 0%, #070e1c 55%, #060a17 100%);
+    linear-gradient(to bottom, #0c1320 0%, #080810 50%, #060609 100%);
   font-family: Arial, Helvetica, sans-serif;
   background-size: 120% 120%, 120% 120%, 100% 100%;
   animation: rize-bg-shift 18s ease-in-out infinite alternate;

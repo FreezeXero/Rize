@@ -2,18 +2,21 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getUserUsageStats } from "@/lib/db/usage";
+import { FooterSection } from "@/components/landing/FooterSection";
 
 export default async function BillingPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
   const usage = await getUserUsageStats(user.id);
-  const exportGoal = usage.plan === "max" ? 100 : usage.plan === "pro" ? 30 : 3;
+  const exportUnlimited = usage.plan === "max" || usage.plan === "free";
+  const exportGoal = usage.plan === "pro" ? 30 : 100;
   const aiGoal = usage.plan === "max" ? 1000 : usage.plan === "pro" ? 100 : 10;
-  const exportPct = Math.min(100, Math.round((usage.exports_this_month / exportGoal) * 100));
+  const exportPct = exportUnlimited ? 100 : Math.min(100, Math.round((usage.exports_this_month / exportGoal) * 100));
   const aiPct = Math.min(100, Math.round((usage.ai_uses_this_month / aiGoal) * 100));
 
   return (
+    <>
     <div className="mx-auto max-w-6xl px-4 py-10 md:px-6">
       <h1 className="text-2xl font-semibold text-white">Billing</h1>
       <p className="mt-2 text-zinc-300">
@@ -21,14 +24,14 @@ export default async function BillingPage() {
       </p>
 
       <div className="mt-8 grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+        <div className="rounded-2xl border border-white/10 bg-[#0f0f1a] p-5">
           <div className="text-sm text-zinc-300">Plan</div>
           <div className="mt-1 text-lg font-semibold uppercase text-white">{usage.plan}</div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/30">
             <div className="h-full w-full bg-gradient-to-r from-cyan-400/50 to-violet-400/50" />
           </div>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+        <div className="rounded-2xl border border-white/10 bg-[#0f0f1a] p-5">
           <div className="text-sm text-zinc-300">Exports this month</div>
           <div className="mt-1 text-lg font-semibold text-white">
             {usage.exports_this_month}
@@ -40,10 +43,10 @@ export default async function BillingPage() {
             />
           </div>
           <div className="mt-2 text-xs text-zinc-500">
-            {usage.plan === "max" ? "Unlimited plan (visualized)" : `${exportPct}% of monthly allowance`}
+            {exportUnlimited ? "Unlimited exports" : `${exportPct}% of monthly allowance`}
           </div>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+        <div className="rounded-2xl border border-white/10 bg-[#0f0f1a] p-5">
           <div className="text-sm text-zinc-300">AI uses this month</div>
           <div className="mt-1 text-lg font-semibold text-white">
             {usage.ai_uses_this_month}
@@ -60,7 +63,7 @@ export default async function BillingPage() {
         </div>
       </div>
 
-      <div className="mt-8 rounded-3xl border border-white/10 bg-white/5 p-6">
+      <div className="mt-8 rounded-3xl border border-white/10 bg-[#0f0f1a] p-6">
         <div className="text-sm font-semibold text-white">Upgrade / downgrade</div>
         <p className="mt-2 text-sm text-zinc-300">
           Use the Pricing page to switch plans. Stripe webhooks will update your
@@ -74,6 +77,8 @@ export default async function BillingPage() {
         </Link>
       </div>
     </div>
+    <FooterSection />
+    </>
   );
 }
 

@@ -44,7 +44,7 @@ function Dropdown(props: {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-10 items-center gap-1 rounded-full border border-white/10 bg-white/5 px-3 text-sm font-semibold text-zinc-100 transition hover:border-cyan-300/40 hover:bg-white/10"
+        className="inline-flex items-center gap-1 text-sm font-medium text-zinc-300 transition hover:text-white"
       >
         {props.label}
         <ChevronDown size={14} className="text-zinc-400" />
@@ -60,16 +60,16 @@ function Dropdown(props: {
 
 export function LoggedInNav() {
   return (
-    <nav className="hidden flex-1 items-center justify-center gap-2 md:flex" aria-label="Main">
+    <nav className="hidden flex-1 items-center justify-center gap-6 md:flex" aria-label="Main">
       <Link
         href="/dashboard"
-        className="inline-flex h-10 items-center rounded-full border border-white/10 bg-white/5 px-3 text-sm font-semibold text-zinc-100 transition hover:border-cyan-300/40 hover:bg-white/10"
+        className="text-sm font-medium text-zinc-300 transition hover:text-white"
       >
         Dashboard
       </Link>
       <Link
         href="/dashboard/ats"
-        className="inline-flex h-10 items-center rounded-full border border-white/10 bg-white/5 px-3 text-sm font-semibold text-zinc-100 transition hover:border-cyan-300/40 hover:bg-white/10"
+        className="text-sm font-medium text-zinc-300 transition hover:text-white"
       >
         ATS Checker
       </Link>
@@ -97,6 +97,13 @@ export function LoggedInNav() {
           </Link>
         ))}
       </Dropdown>
+
+      <Link
+        href="/pricing"
+        className="rounded-full border border-cyan-300/30 px-3 py-1 text-sm font-medium text-cyan-200 transition hover:border-cyan-300/55 hover:bg-cyan-300/[.06] hover:text-white"
+      >
+        Upgrade
+      </Link>
     </nav>
   );
 }

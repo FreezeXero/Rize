@@ -4,7 +4,7 @@ export type BillingCycle = "monthly" | "annual";
 export const PLAN_LIMITS = {
   free: {
     maxResumes: 2,
-    exportLimitPerMonth: 3,
+    exportLimitPerMonth: "unlimited" as const,
     maxAIBulletRewritesPerMonth: 10,
     atsCheckerEnabled: false,
     aiLatexConversionEnabled: false,

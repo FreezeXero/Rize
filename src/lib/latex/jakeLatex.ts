@@ -1,6 +1,13 @@
 import type { ResumeContent } from "@/lib/db/resumeTypes";
 import { resolveSectionOrder } from "@/lib/pdf/sectionOrder";
 
+/** Like escapeLatex but preserves inline LaTeX formatting commands inserted by the toolbar. */
+export function escapeLatexBullet(input: string): string {
+  const cmdRe = /(\\(?:textbf|textit|underline|emph|texttt|textsc)\{[^}]*\})/g;
+  const parts = input.split(cmdRe);
+  return parts.map((part, i) => (i % 2 === 1 ? part : escapeLatex(part))).join("");
+}
+
 export function escapeLatex(input: string) {
   return input
     .replace(/\\/g, "\\textbackslash{}")
@@ -147,7 +154,7 @@ function buildExperienceLatex(content: ResumeContent): string {
       {${escapeLatex(e.role)}}{${escapeLatex(e.location ?? "")}}
       {${escapeLatex(e.company)}}{${escapeLatex(`${e.start} -- ${e.end}`)}}
       \\resumeItemListStart
-${e.bullets.map((b) => `        \\resumeItem{${escapeLatex(b)}}`).join("\n")}
+${e.bullets.map((b) => `        \\resumeItem{${escapeLatexBullet(b)}}`).join("\n")}
       \\resumeItemListEnd`
     )
     .join("\n\n");
@@ -163,7 +170,7 @@ function buildProjectsLatex(content: ResumeContent): string {
       (p) => `      \\resumeProjectHeading
           {\\textbf{${escapeLatex(p.name)}} $|$ \\emph{${escapeLatex(p.link || "Project")}}}{}
           \\resumeItemListStart
-${p.bullets.map((b) => `            \\resumeItem{${escapeLatex(b)}}`).join("\n")}
+${p.bullets.map((b) => `            \\resumeItem{${escapeLatexBullet(b)}}`).join("\n")}
           \\resumeItemListEnd`
     )
     .join("\n");
@@ -180,7 +187,7 @@ function buildLeadershipLatex(content: ResumeContent): string {
       (p) => `      \\resumeProjectHeading
           {\\textbf{${escapeLatex(p.name)}} $|$ \\emph{${escapeLatex(p.link || "")}}}{}
           \\resumeItemListStart
-${p.bullets.map((b) => `            \\resumeItem{${escapeLatex(b)}}`).join("\n")}
+${p.bullets.map((b) => `            \\resumeItem{${escapeLatexBullet(b)}}`).join("\n")}
           \\resumeItemListEnd`
     )
     .join("\n");
@@ -212,7 +219,7 @@ function buildCustomSectionLatex(cs: NonNullable<ResumeContent["customSections"]
   if (cs.bullets?.length) {
     return `\\section{${title}}
 \\resumeItemListStart
-${cs.bullets.map((b) => `  \\resumeItem{${escapeLatex(b)}}`).join("\n")}
+${cs.bullets.map((b) => `  \\resumeItem{${escapeLatexBullet(b)}}`).join("\n")}
 \\resumeItemListEnd`;
   }
   return `\\section{${title}}
@@ -239,9 +246,11 @@ export function buildOfficialJakeLatex(content: ResumeContent): string {
       : "555-123-4567 $|$ \\underline{johndoe@email.com}";
 
   const order = resolveSectionOrder(content, "jakes_latex");
+  const hiddenSet = new Set(content.hiddenSections ?? []);
   const bodyChunks: string[] = [];
 
   for (const id of order) {
+    if (hiddenSet.has(id)) continue;
     if (id === "summary") {
       const latex = buildSummaryLatex(content);
       if (latex) bodyChunks.push(latex);

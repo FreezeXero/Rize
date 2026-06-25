@@ -1,13 +1,32 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { consumeAIUse, getUserPlan } from "@/lib/db/usage";
+import {
+  consumeAIUse,
+  getUserPlan,
+  getWeeklyATSCheckCount,
+  recordUsageOnly,
+} from "@/lib/db/usage";
 import { getResumeForUser } from "@/lib/db/resumes";
-import { computeATSBasic, resumeContentToText } from "@/lib/ats/ats";
+import { resumeContentToText } from "@/lib/ats/ats";
 import { claudeComplete } from "@/lib/ai/claude";
 import { atsSuggestionPrompt } from "@/lib/ai/prompts";
 import type { ResumeContent } from "@/lib/db/resumeTypes";
 
 export const runtime = "nodejs";
+
+const FREE_ATS_WEEKLY_LIMIT = 3;
+
+const ATS_SYSTEM_PROMPT =
+  "You are a senior technical recruiter. Analyze how well this resume matches this job posting. " +
+  "Ignore any LinkedIn UI text, metadata, location info, application stats, or anything that is not an actual job requirement. " +
+  "Focus only on: responsibilities, qualifications, required skills, and preferred skills sections of the job posting.\n\n" +
+  "Return a JSON object with exactly these fields:\n" +
+  "- matchPercentage: number 0-100 based on genuine qualifications fit\n" +
+  "- strengths: array of strings describing what the candidate does well for this role\n" +
+  "- missing: array of strings describing actual skill or experience gaps (only real requirements, never words like united, states, reposted, weeks, ago, people, clicked, apply, promoted, hirer, responses, or any metadata)\n" +
+  "- suggestions: array of specific actionable strings telling the candidate exactly how to improve their resume for this role\n" +
+  "- summary: one paragraph plain English assessment\n\n" +
+  "Never include metadata words in missing or suggestions. Only include real technical skills, experience, or qualifications that are actually required by the job.";
 
 export async function POST(req: Request) {
   const supabase = createSupabaseServerClient();
@@ -22,12 +41,14 @@ export async function POST(req: Request) {
     );
   }
 
-  const body = (await req.json()) as {
-    resumeId: string;
-    jobDescription: string;
-  };
+  let body: { resumeId?: string; jobDescription?: string };
+  try {
+    body = (await req.json()) as { resumeId?: string; jobDescription?: string };
+  } catch {
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+  }
 
-  if (!body?.resumeId || !body?.jobDescription) {
+  if (!body?.resumeId || !body?.jobDescription?.trim()) {
     return NextResponse.json(
       { error: "Missing resumeId or jobDescription" },
       { status: 400 }
@@ -35,82 +56,79 @@ export async function POST(req: Request) {
   }
 
   const plan = await getUserPlan(user.id);
+
+  // Free plan: 3 checks/week limit, then Claude analysis
   if (plan === "free") {
-    return NextResponse.json(
-      { error: "ATS checker is available on Pro and Max." },
-      { status: 403 }
-    );
+    const weeklyUsed = await getWeeklyATSCheckCount(user.id);
+    if (weeklyUsed >= FREE_ATS_WEEKLY_LIMIT) {
+      return NextResponse.json(
+        {
+          error: `Free plan allows ${FREE_ATS_WEEKLY_LIMIT} ATS checks per week. Upgrade to Pro for unlimited AI-powered analysis.`,
+        },
+        { status: 403 }
+      );
+    }
+    await recordUsageOnly(user.id, "ats_basic");
+  } else if (plan === "pro") {
+    await recordUsageOnly(user.id, "ats_basic");
+  } else {
+    await consumeAIUse(user.id, "ats_full");
   }
 
   const resumeRow = await getResumeForUser(user.id, body.resumeId);
   const resumeText = resumeContentToText(resumeRow.content as ResumeContent);
-  const basic = computeATSBasic({
+
+  // Send raw texts directly to Claude — no pre-processing or keyword extraction
+  const userMessage = atsSuggestionPrompt({
     jobDescription: body.jobDescription,
     resumeText,
   });
 
-  if (plan === "pro") {
-    return NextResponse.json({
-      matchPercentage: basic.matchPercentage,
-      missingKeywords: basic.missingKeywords,
-      suggestions: basic.suggestions,
-    });
-  }
-
-  // Max: optionally enrich with a detailed Claude report.
-  await consumeAIUse(user.id, "ats_full");
-  const prompt = atsSuggestionPrompt({
-    jobDescription: body.jobDescription,
-    resumeText,
-    mode: "full",
+  const rawResponse = await claudeComplete({
+    user: userMessage,
+    maxTokens: 1200,
+    system: ATS_SYSTEM_PROMPT,
   });
 
-  const detailed = await claudeComplete({
-    user: prompt,
-    maxTokens: 900,
-    system:
-      "Respond with a JSON object only. Ensure it is valid JSON without markdown.",
-  });
-
-  let parsed: unknown;
+  // Extract JSON from response (handle cases where Claude adds any surrounding text)
+  let parsed: Record<string, unknown> | null = null;
   try {
-    parsed = JSON.parse(detailed);
+    const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? jsonMatch[0] : rawResponse;
+    const obj = JSON.parse(jsonStr);
+    if (typeof obj === "object" && obj !== null) {
+      parsed = obj as Record<string, unknown>;
+    }
   } catch {
-    // If parsing fails, still return the basic heuristics.
-    return NextResponse.json({
-      matchPercentage: basic.matchPercentage,
-      missingKeywords: basic.missingKeywords,
-      suggestions: basic.suggestions,
-      detailedReport: detailed,
-    });
+    // fall through to null check below
   }
 
-  const parsedObj =
-    typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
+  if (!parsed) {
+    return NextResponse.json(
+      { error: "Analysis failed to parse. Please try again." },
+      { status: 500 }
+    );
+  }
 
   const matchPercentage =
-    typeof parsedObj?.matchPercentage === "number"
-      ? parsedObj.matchPercentage
-      : basic.matchPercentage;
+    typeof parsed.matchPercentage === "number"
+      ? Math.min(100, Math.max(0, Math.round(parsed.matchPercentage)))
+      : 0;
 
-  const missingKeywords =
-    Array.isArray(parsedObj?.missingKeywords) && parsedObj.missingKeywords.every((x) => typeof x === "string")
-      ? (parsedObj.missingKeywords as string[])
-      : basic.missingKeywords;
+  const toStringArray = (val: unknown): string[] =>
+    Array.isArray(val) && (val as unknown[]).every((x) => typeof x === "string")
+      ? (val as string[])
+      : [];
 
-  const suggestions =
-    Array.isArray(parsedObj?.topSuggestions) && parsedObj.topSuggestions.every((x) => typeof x === "string")
-      ? (parsedObj.topSuggestions as string[])
-      : basic.suggestions;
+  const missing = toStringArray(parsed.missing);
+  const suggestions = toStringArray(parsed.suggestions);
+  const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : undefined;
 
-  const detailedReport =
-    typeof parsedObj?.detailedReport === "string" ? parsedObj.detailedReport : null;
+  // Max plan gets the strengths card; Free + Pro do not
+  if (plan === "max") {
+    const strengths = toStringArray(parsed.strengths);
+    return NextResponse.json({ matchPercentage, strengths, missing, suggestions, summary });
+  }
 
-  return NextResponse.json({
-    matchPercentage,
-    missingKeywords,
-    suggestions,
-    detailedReport,
-  });
+  return NextResponse.json({ matchPercentage, missing, suggestions, summary });
 }
-

@@ -134,13 +134,21 @@ export function AuthNav() {
             <img
               src={user.avatarUrl}
               alt={`${user.firstName} avatar`}
+              referrerPolicy="no-referrer"
               className="h-7 w-7 rounded-full object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+                const next = e.currentTarget.nextElementSibling as HTMLElement | null;
+                if (next) next.style.display = "grid";
+              }}
             />
-          ) : (
-            <span className="grid h-7 w-7 place-items-center rounded-full bg-cyan-300/20 text-xs font-semibold text-cyan-200">
-              {user.firstName.charAt(0).toUpperCase()}
-            </span>
-          )}
+          ) : null}
+          <span
+            style={{ display: user.avatarUrl ? "none" : "grid" }}
+            className="h-7 w-7 place-items-center rounded-full bg-cyan-300/20 text-xs font-semibold text-cyan-200"
+          >
+            {user.firstName.charAt(0).toUpperCase()}
+          </span>
           <span className="max-w-20 truncate">{user.firstName}</span>
           <ChevronDown size={14} className="text-zinc-400" />
         </button>

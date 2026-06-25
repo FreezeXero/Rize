@@ -41,21 +41,21 @@ export function HeaderNavLinks() {
   }
 
   return (
-    <nav className="hidden flex-1 items-center justify-center gap-3 text-sm md:flex">
+    <nav className="hidden flex-1 items-center justify-center gap-7 md:flex">
       <a
-        className="inline-flex h-10 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 text-sm font-semibold text-zinc-100 transition hover:border-cyan-300/40 hover:bg-white/10"
+        className="text-sm font-medium text-zinc-300 transition hover:text-white"
         href="/#features"
       >
         Features
       </a>
       <Link
-        className="inline-flex h-10 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 text-sm font-semibold text-zinc-100 transition hover:border-cyan-300/40 hover:bg-white/10"
+        className="text-sm font-medium text-zinc-300 transition hover:text-white"
         href="/pricing"
       >
         Pricing
       </Link>
       <Link
-        className="inline-flex h-10 items-center justify-center rounded-full border border-white/10 bg-white/5 px-4 text-sm font-semibold text-zinc-100 transition hover:border-cyan-300/40 hover:bg-white/10"
+        className="text-sm font-medium text-zinc-300 transition hover:text-white"
         href="/help"
       >
         Help

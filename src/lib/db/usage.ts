@@ -175,6 +175,61 @@ function getMonthStartISO() {
   return d.toISOString();
 }
 
+function getWeekStartISO() {
+  const d = new Date();
+  d.setDate(d.getDate() - d.getDay()); // back to Sunday
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+async function countAIWeekTotal(userId: string) {
+  const weekStart = getWeekStartISO();
+  const { count, error } = await supabaseAdmin
+    .from("usage")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .in("action_type", ["ai_bullet_rewrite", "ai_latex_conversion", "ats_basic", "ats_full"] as const)
+    .gte("timestamp", weekStart);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function getWeeklyAIRewriteCount(userId: string): Promise<number> {
+  const weekStart = getWeekStartISO();
+  const { count, error } = await supabaseAdmin
+    .from("usage")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("action_type", "ai_bullet_rewrite")
+    .gte("timestamp", weekStart);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function getWeeklyATSCheckCount(userId: string): Promise<number> {
+  const weekStart = getWeekStartISO();
+  const { count, error } = await supabaseAdmin
+    .from("usage")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("action_type", "ats_basic")
+    .gte("timestamp", weekStart);
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function recordUsageOnly(
+  userId: string,
+  actionType: UsageActionType
+): Promise<void> {
+  const { error } = await supabaseAdmin.from("usage").insert({
+    user_id: userId,
+    action_type: actionType,
+    timestamp: new Date().toISOString(),
+  });
+  if (error) throw error;
+}
+
 async function countUsageThisMonth(userId: string, actionType: UsageActionType) {
   const monthStart = getMonthStartISO();
   const { count, error } = await supabaseAdmin
@@ -286,8 +341,11 @@ export async function consumeAIUse(userId: string, actionType: UsageActionType) 
     return;
   }
 
-  // We treat all counted AI actions as 1 "AI use" each.
-  const used = await countAIMonthTotal(userId);
+  // AI bullet rewrite quota resets weekly; other AI actions still use the monthly total.
+  const used =
+    actionType === "ai_bullet_rewrite"
+      ? await countAIWeekTotal(userId)
+      : await countAIMonthTotal(userId);
   if (used >= limits.maxAIBulletRewritesPerMonth) {
     throw new Error("AI usage limit reached for your plan.");
   }

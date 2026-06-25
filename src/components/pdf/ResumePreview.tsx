@@ -6,8 +6,8 @@ import { PDFViewer } from "@react-pdf/renderer";
 import type { ResumeContent, ResumeTemplateKey } from "@/lib/db/resumeTypes";
 import { ResumeDocument } from "@/lib/pdf/ResumeDocument";
 
-/** ~A4 width in pt; react-pdf canvas is often slightly wider — scale to fit panel. */
-const PDF_NOMINAL_WIDTH = 600;
+// US Letter aspect ratio (height / width)
+const PDF_ASPECT = 792 / 612;
 
 export function ResumePreview(props: {
   resume: ResumeContent;
@@ -19,18 +19,21 @@ export function ResumePreview(props: {
 }) {
   const previewKey = `${props.template}:${JSON.stringify(props.resume)}`;
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
-      const w = el.clientWidth;
-      if (w > 0) setScale(Math.min(1, (w - 4) / PDF_NOMINAL_WIDTH));
+      if (el.clientWidth > 0) setContainerWidth(el.clientWidth);
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // Renderer receives explicit pixel dimensions = panel width, fitting to width.
+  const renderW = containerWidth > 0 ? containerWidth : undefined;
+  const renderH = renderW ? Math.round(renderW * PDF_ASPECT) : undefined;
 
   const overlay = props.compiling ? (
     <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 rounded-2xl bg-black/45 backdrop-blur-[2px]">
@@ -39,26 +42,13 @@ export function ResumePreview(props: {
     </div>
   ) : null;
 
-  const scaledShell = (child: ReactNode) => (
+  const shell = (child: ReactNode) => (
     <div
       ref={containerRef}
-      className="relative h-[calc(100vh-190px)] w-full min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-black/20"
+      className="relative h-[calc(100vh-190px)] w-full overflow-y-auto overflow-x-hidden rounded-2xl border border-white/10 bg-black/20"
     >
       {overlay}
-      <div
-        className="flex h-full w-full min-w-0 justify-center overflow-hidden"
-        style={{
-          transform: `scale(${scale})`,
-          transformOrigin: "top center",
-        }}
-      >
-        <div
-          className="h-full w-full min-w-0"
-          style={{ width: `${100 / scale}%`, maxWidth: `${100 / scale}%` }}
-        >
-          {child}
-        </div>
-      </div>
+      {child}
     </div>
   );
 
@@ -67,37 +57,50 @@ export function ResumePreview(props: {
       const src = props.compiledPdfUrl.includes("#")
         ? props.compiledPdfUrl
         : `${props.compiledPdfUrl}#toolbar=0`;
-      return scaledShell(
+      return shell(
         <iframe
+          key={src}
           title="Compiled LaTeX preview"
           src={src}
-          className="h-full w-full min-w-0 border-0 bg-white"
+          style={{
+            display: "block",
+            border: "none",
+            backgroundColor: "white",
+            width: renderW ? `${renderW}px` : "100%",
+            height: renderH ? `${renderH}px` : "100%",
+          }}
         />
       );
     }
     if (props.compileError) {
-      return scaledShell(
+      return shell(
         <div className="flex h-full w-full items-center justify-center px-4 text-center text-sm text-red-300">
           LaTeX compilation failed: {props.compileError}
         </div>
       );
     }
-    return scaledShell(
+    return shell(
       <div className="flex h-full w-full items-center justify-center px-4 text-center text-sm text-zinc-300">
-        Waiting for LaTeX preview...
+        Waiting for LaTeX preview…
       </div>
     );
   }
 
-  return scaledShell(
-    <div className="h-full w-full min-w-0 overflow-hidden [&>div]:!h-full [&>div]:!min-w-0 [&>div]:!w-full [&>div]:!max-w-full">
-      <PDFViewer key={previewKey} className="h-full w-full min-w-0 !max-w-full">
-        <ResumeDocument
-          key={previewKey}
-          resume={props.resume}
-          template={props.template}
-        />
-      </PDFViewer>
-    </div>
+  // react-pdf's PDFViewer accepts width/height that control the iframe's render
+  // dimensions. Passing explicit pixels here means the PDF.js inside renders at
+  // native resolution for those dimensions — no CSS scaling, no blurriness.
+  return shell(
+    <PDFViewer
+      key={previewKey}
+      width={renderW ?? "100%"}
+      height={renderH ?? "100%"}
+      className="block border-none"
+    >
+      <ResumeDocument
+        key={previewKey}
+        resume={props.resume}
+        template={props.template}
+      />
+    </PDFViewer>
   );
 }
